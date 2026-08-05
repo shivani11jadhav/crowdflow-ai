@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CrowdFlow AI — Stadium Operations Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+  <!-- Socket.io client — loaded from the running backend -->
+  <script src="http://localhost:3001/socket.io/socket.io.js"></script>
+</head>
+<body>
+
+  <!-- SCANLINE OVERLAY -->
+  <div class="scanlines" aria-hidden="true"></div>
+
+  <!-- EMERGENCY STROBE BANNER — toggled by JS when emergencyProtocol=true -->
+  <div class="emergency-banner" id="emergencyBanner" style="display:none" aria-live="assertive">
+    <div class="eb-inner">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 1.5L16.5 15H1.5L9 1.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><line x1="9" y1="7" x2="9" y2="11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="9" cy="13.5" r="0.9" fill="currentColor"/></svg>
+      <span id="emergencyBannerMsg">⚠ EMERGENCY PROTOCOL ACTIVE — Critical gate congestion detected. Follow security instructions.</span>
+      <button class="eb-close" onclick="document.getElementById('emergencyBanner').style.display='none'" aria-label="Dismiss">✕</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════ NAVBAR ═══════════════════════════════════ -->
+  <header class="navbar">
+
+    <!-- Brand -->
+    <div class="nav-brand">
+      <div class="brand-icon">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <circle cx="11" cy="11" r="10" stroke="url(#brandGrad)" stroke-width="1.5"/>
+          <circle cx="11" cy="11" r="4" fill="url(#brandGrad)"/>
+          <line x1="11" y1="1" x2="11" y2="5" stroke="url(#brandGrad)" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="11" y1="17" x2="11" y2="21" stroke="url(#brandGrad)" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="1" y1="11" x2="5" y2="11" stroke="url(#brandGrad)" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="17" y1="11" x2="21" y2="11" stroke="url(#brandGrad)" stroke-width="1.5" stroke-linecap="round"/>
+          <defs>
+            <linearGradient id="brandGrad" x1="0" y1="0" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#818cf8"/>
+              <stop offset="100%" stop-color="#38bdf8"/>
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <div class="brand-text-wrap">
+        <div class="brand-text">CrowdFlow<span class="brand-ai">AI</span></div>
+        <div class="brand-sub">Stadium Operations</div>
+      </div>
+    </div>
+
+    <!-- ── Inline nav tabs (moved from .tab-wrap) ── -->
+    <nav class="nav-tabs" role="tablist">
+      <button class="nav-tab active" id="navtab-map"    onclick="switchTab('map', this)"    role="tab" aria-selected="true"  aria-controls="tab-map">
+        <svg width="13" height="13" viewBox="0 0 15 15" fill="none"><path d="M7.5 1L12 3.5V11.5L7.5 14L3 11.5V3.5L7.5 1Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+        Gate Map
+      </button>
+      <button class="nav-tab" id="navtab-wait"   onclick="switchTab('wait', this)"   role="tab" aria-selected="false" aria-controls="tab-wait">
+        <svg width="13" height="13" viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="7.5" r="6" stroke="currentColor" stroke-width="1.3"/><path d="M7.5 4V7.5L9.5 9.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Wait Times
+      </button>
+      <button class="nav-tab" id="navtab-alerts" onclick="switchTab('alerts', this)" role="tab" aria-selected="false" aria-controls="tab-alerts">
+        <svg width="13" height="13" viewBox="0 0 15 15" fill="none"><path d="M7.5 1.5L13 12H2L7.5 1.5Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><line x1="7.5" y1="6" x2="7.5" y2="9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="7.5" cy="10.5" r="0.6" fill="currentColor"/></svg>
+        Alerts
+      </button>
+      <button class="nav-tab" id="navtab-ai"     onclick="switchTab('ai', this)"     role="tab" aria-selected="false" aria-controls="tab-ai">
+        <svg width="13" height="13" viewBox="0 0 15 15" fill="none"><rect x="1" y="2" width="13" height="8" rx="2" stroke="currentColor" stroke-width="1.3"/><path d="M4.5 13L7.5 11L10.5 13" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="4.5" cy="6" r="0.8" fill="currentColor"/><circle cx="7.5" cy="6" r="0.8" fill="currentColor"/><circle cx="10.5" cy="6" r="0.8" fill="currentColor"/></svg>
+        AI Command
+      </button>
+    </nav>
+
+    <!-- Status strip -->
+    <div class="nav-status">
+      <div class="live-pill conn-connecting" id="connPill">
+        <span class="pulse pulse-amber"></span>CONNECTING
+      </div>
+      <div class="nav-divider"></div>
+      <div class="nav-stat">
+        <span class="nav-stat-val" id="heroAttendees">2,418</span>
+        <span class="nav-stat-lbl">Attendees</span>
+      </div>
+      <div class="nav-divider"></div>
+      <div class="hstat">
+        <span class="hstat-val">68%</span>
+        <span class="hstat-lbl">Capacity</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ═══════════════════════════════════ KPI BAR ═══════════════════════════════════ -->
+  <div class="kpi-bar">
+    <div class="kpi-bar-inner">
+      <div class="kpi-item">
+        <span class="kpi-val" id="kpiAttendees">2,418</span>
+        <span class="kpi-lbl">Total Attendees</span>
+      </div>
+      <div class="kpi-divider"></div>
+      <div class="kpi-item">
+        <span class="kpi-val kpi-amber">68%</span>
+        <span class="kpi-lbl">Capacity Used</span>
+      </div>
+      <div class="kpi-divider"></div>
+      <div class="kpi-item">
+        <span class="kpi-val kpi-green">5 min</span>
+        <span class="kpi-lbl">Best Wait Time</span>
+      </div>
+      <div class="kpi-divider"></div>
+      <div class="kpi-item">
+        <span class="kpi-val kpi-blue">4</span>
+        <span class="kpi-lbl">Zones Online</span>
+      </div>
+      <div class="kpi-divider"></div>
+      <div class="kpi-item kpi-badge-item">
+        <span class="kpi-eyebrow">
+          <span class="eyebrow-dot"></span>
+          PromptWars: Virtual 2026 — Smart Venue Intelligence
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════ PANELS ═══════════════════════════════════ -->
+  <main>
+
+    <!-- ╔══════════════════╗ PANEL 1 — GATE TELEMETRY MAP ╔══════════════════╗ -->
+    <div id="tab-map" class="panel active" role="tabpanel" aria-labelledby="navtab-map">
+
+      <div class="panel-header">
+        <div class="ph-left">
+          <h2>Live Gate Telemetry</h2>
+          <span class="panel-badge">
+            <span class="pulse" style="width:6px;height:6px;"></span>
+            Auto-sync every 5s
+          </span>
+        </div>
+        <div class="map-legend">
+          <span class="leg"><span class="leg-dot" style="background:var(--green)"></span>Open</span>
+          <span class="leg"><span class="leg-dot" style="background:var(--amber)"></span>Busy</span>
+          <span class="leg"><span class="leg-dot" style="background:var(--red)"></span>Critical</span>
+        </div>
+      </div>
+
+      <!-- 4-Gate Telemetry Grid -->
+      <div class="gate-grid">
+
+        <!-- GATE A -->
+        <div class="gate-card gc-green" id="zcard-Gate-A">
+          <div class="gc-top">
+            <div class="gc-label">
+              <span class="gc-id">A</span>
+              <div>
+                <div class="gc-name">Gate A</div>
+                <div class="gc-dir">North Entrance</div>
+              </div>
+            </div>
+            <span class="gc-badge gc-badge-green" id="zbadge-Gate-A">OPEN</span>
+          </div>
+          <div class="gc-bar-wrap">
+            <div class="gc-bar-track">
+              <div class="gc-bar-fill gcf-green" id="g1fill" style="width:20%"></div>
+            </div>
+            <span class="gc-pct" id="g1pct">20%</span>
+          </div>
+          <div class="gc-foot">
+            <span class="gc-status gcst-green" id="zstatus-Gate-A">Low congestion</span>
+            <span class="gc-wait" id="zrec-Gate-A">
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.2"/><path d="M6 3v3l2 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+              5 min wait
+            </span>
+          </div>
+          <div class="gc-mins-badge" id="wg1">5<span>min</span></div>
+        </div>
+
+        <!-- GATE B -->
+        <div class="gate-card gc-red" id="zcard-Gate-B">
+          <div class="gc-top">
+            <div class="gc-label">
+              <span class="gc-id gc-id-red">B</span>
+              <div>
+                <div class="gc-name">Gate B</div>
+                <div class="gc-dir">South Entrance</div>
+              </div>
+            </div>
+            <span class="gc-badge gc-badge-red" id="zbadge-Gate-B">BUSY</span>
+          </div>
+          <div class="gc-bar-wrap">
+            <div class="gc-bar-track">
+              <div class="gc-bar-fill gcf-red" id="g2fill" style="width:85%"></div>
+            </div>
+            <span class="gc-pct" id="g2pct">85%</span>
+          </div>
+          <div class="gc-foot">
+            <span class="gc-status gcst-red" id="zstatus-Gate-B">High congestion</span>
+            <span class="gc-wait" id="zrec-Gate-B">
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.2"/><path d="M6 3v3l2 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+              25 min wait
+            </span>
+          </div>
+          <div class="gc-mins-badge gc-mins-red" id="wg2">25<span>min</span></div>
+        </div>
+
+        <!-- GATE C -->
+        <div class="gate-card gc-amber" id="zcard-Gate-C">
+          <div class="gc-top">
+            <div class="gc-label">
+              <span class="gc-id gc-id-amber">C</span>
+              <div>
+                <div class="gc-name">Gate C</div>
+                <div class="gc-dir">East Entrance</div>
+              </div>
+            </div>
+            <span class="gc-badge gc-badge-amber" id="zbadge-Gate-C">OPEN</span>
+          </div>
+          <div class="gc-bar-wrap">
+            <div class="gc-bar-track">
+              <div class="gc-bar-fill gcf-amber" id="fcfill" style="width:55%"></div>
+            </div>
+            <span class="gc-pct" id="fcpct">55%</span>
+          </div>
+          <div class="gc-foot">
+            <span class="gc-status gcst-amber" id="zstatus-Gate-C">Moderate crowd</span>
+            <span class="gc-wait" id="zrec-Gate-C">
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.2"/><path d="M6 3v3l2 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+              11 min wait
+            </span>
+          </div>
+          <div class="gc-mins-badge gc-mins-amber" id="wfc">11<span>min</span></div>
+        </div>
+
+        <!-- GATE D -->
+        <div class="gate-card gc-green" id="zcard-Gate-D">
+          <div class="gc-top">
+            <div class="gc-label">
+              <span class="gc-id">D</span>
+              <div>
+                <div class="gc-name">Gate D</div>
+                <div class="gc-dir">West Entrance</div>
+              </div>
+            </div>
+            <span class="gc-badge gc-badge-green" id="zbadge-Gate-D">OPEN</span>
+          </div>
+          <div class="gc-bar-wrap">
+            <div class="gc-bar-track">
+              <div class="gc-bar-fill gcf-green" id="parfill" style="width:35%"></div>
+            </div>
+            <span class="gc-pct" id="parpct">35%</span>
+          </div>
+          <div class="gc-foot">
+            <span class="gc-status gcst-green" id="zstatus-Gate-D">Plenty of space</span>
+            <span class="gc-wait" id="zrec-Gate-D">
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.2"/><path d="M6 3v3l2 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+              Near parking
+            </span>
+          </div>
+          <div class="gc-mins-badge" id="wdummy-d">—<span></span></div>
+        </div>
+
+      </div><!-- /gate-grid -->
+
+      <!-- Stadium diagram -->
+      <div class="stadium-diag">
+        <div class="stadium-outer"></div>
+        <div class="stadium-inner"></div>
+        <div class="stadium-field"><span>FIELD</span></div>
+        <div class="gpin" style="top:6%;left:50%;transform:translateX(-50%)">
+          <div class="gpin-dot green-gpin">A</div>
+          <div class="gpin-lbl">Gate A · North</div>
+        </div>
+        <div class="gpin" style="bottom:6%;left:50%;transform:translateX(-50%)">
+          <div class="gpin-dot red-gpin">B</div>
+          <div class="gpin-lbl">Gate B · South</div>
+        </div>
+        <div class="gpin" style="top:50%;right:4%;transform:translateY(-50%)">
+          <div class="gpin-dot amber-gpin">C</div>
+          <div class="gpin-lbl">Gate C · East</div>
+        </div>
+        <div class="gpin" style="top:50%;left:4%;transform:translateY(-50%)">
+          <div class="gpin-dot green-gpin">D</div>
+          <div class="gpin-lbl">Gate D · West</div>
+        </div>
+      </div>
+
+      <button class="action-btn" onclick="refreshMap()">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M12 7A5 5 0 1 1 7 2M7 2L10 5M7 2L4 5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Sync Crowd Data
+      </button>
+    </div>
+
+    <!-- ╔══════════════════╗ PANEL 2 — WAIT TIMES ╔══════════════════╗ -->
+    <div id="tab-wait" class="panel" role="tabpanel" aria-labelledby="navtab-wait">
+      <div class="panel-header">
+        <div class="ph-left">
+          <h2>Live Waiting Times</h2>
+          <span class="panel-badge"><span class="pulse" style="width:6px;height:6px;"></span>Real-time</span>
+        </div>
+        <button class="action-btn-sm" onclick="refreshWait()">↻ Refresh</button>
+      </div>
+
+      <div class="wait-list">
+
+        <div class="wrow">
+          <div class="wicon wicon-green">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M3 9H15M9 3L15 9L9 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="winfo">
+            <div class="wname">Gate A — North Entrance</div>
+            <div class="wdesc">Low traffic · smooth entry · recommended</div>
+            <div class="wbar"><div class="wbar-fill wbf-green" style="width:20%"></div></div>
+          </div>
+          <div class="wtblock">
+            <span class="wmins wmins-green" id="wg1">5</span>
+            <span class="wunit">min</span>
+          </div>
+        </div>
+
+        <div class="wrow">
+          <div class="wicon wicon-red">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 3V15M3 9H15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="winfo">
+            <div class="wname">Gate B — South Entrance</div>
+            <div class="wdesc">High traffic · long queues forming</div>
+            <div class="wbar"><div class="wbar-fill wbf-red" style="width:85%"></div></div>
+          </div>
+          <div class="wtblock">
+            <span class="wmins wmins-red" id="wg2">25</span>
+            <span class="wunit">min</span>
+          </div>
+        </div>
+
+        <div class="wrow">
+          <div class="wicon wicon-amber">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M9 5V9L11.5 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="winfo">
+            <div class="wname">Food Court — Level 2</div>
+            <div class="wdesc">Moderate queue · ordering active</div>
+            <div class="wbar"><div class="wbar-fill wbf-amber" style="width:55%"></div></div>
+          </div>
+          <div class="wtblock">
+            <span class="wmins wmins-amber" id="wfc">10</span>
+            <span class="wunit">min</span>
+          </div>
+        </div>
+
+        <div class="wrow">
+          <div class="wicon wicon-green">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="5.5" r="2.5" stroke="currentColor" stroke-width="1.5"/><path d="M3 16c0-3.314 2.686-6 6-6s6 2.686 6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="winfo">
+            <div class="wname">Restrooms — All Levels</div>
+            <div class="wdesc">Clear · no queue · accessible</div>
+            <div class="wbar"><div class="wbar-fill wbf-green" style="width:10%"></div></div>
+          </div>
+          <div class="wtblock">
+            <span class="wmins wmins-green" id="wrest">2</span>
+            <span class="wunit">min</span>
+          </div>
+        </div>
+
+        <div class="wrow">
+          <div class="wicon wicon-amber">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="3" y="3" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M3 7h12" stroke="currentColor" stroke-width="1.5"/></svg>
+          </div>
+          <div class="winfo">
+            <div class="wname">Merchandise Stall</div>
+            <div class="wdesc">Moderate crowd · active browsing</div>
+            <div class="wbar"><div class="wbar-fill wbf-amber" style="width:45%"></div></div>
+          </div>
+          <div class="wtblock">
+            <span class="wmins wmins-amber" id="wmerch">8</span>
+            <span class="wunit">min</span>
+          </div>
+        </div>
+
+        <div class="wrow">
+          <div class="wicon wicon-green">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2" y="4" width="14" height="10" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M5 4V3a1 1 0 011-1h6a1 1 0 011 1v1" stroke="currentColor" stroke-width="1.5"/></svg>
+          </div>
+          <div class="winfo">
+            <div class="wname">Ticketing Counter</div>
+            <div class="wdesc">Low crowd · fast processing</div>
+            <div class="wbar"><div class="wbar-fill wbf-green" style="width:25%"></div></div>
+          </div>
+          <div class="wtblock">
+            <span class="wmins wmins-green" id="wtkt">3</span>
+            <span class="wunit">min</span>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="tip-box">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.2"/><path d="M7 6v4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><circle cx="7" cy="4" r="0.6" fill="currentColor"/></svg>
+        <span>Pro tip: Gate A will remain clear for the next <strong>~20 minutes</strong>. Best window to enter now.</span>
+      </div>
+    </div>
+
+    <!-- ╔══════════════════╗ PANEL 3 — SMART ALERTS ╔══════════════════╗ -->
+    <div id="tab-alerts" class="panel" role="tabpanel" aria-labelledby="navtab-alerts">
+      <div class="panel-header">
+        <div class="ph-left">
+          <h2>Smart Alerts</h2>
+          <span class="panel-badge"><span class="pulse pulse-amber" style="width:6px;height:6px;"></span>Live feed</span>
+        </div>
+        <button class="action-btn-sm" onclick="generateAlert()">⚡ New Alert</button>
+      </div>
+
+      <div class="alert-hero" id="alertHero">
+        <div class="alert-hero-icon">⚡</div>
+        <p id="alertHeroMsg">Gate B is getting heavily congested — switch to Gate A now for faster entry and a shorter wait time.</p>
+      </div>
+
+      <div class="alert-feed" id="alertFeed">
+        <div class="afeed-item green-afeed">
+          <div class="afeed-dot" style="background:var(--green)"></div>
+          <div class="afeed-body">
+            <div class="afeed-title">Gate A Clear</div>
+            <div class="afeed-desc">Lowest crowd right now. Estimated wait: 5 minutes. Use north entrance.</div>
+          </div>
+          <div class="afeed-time">Just now</div>
+        </div>
+        <div class="afeed-item red-afeed">
+          <div class="afeed-dot" style="background:var(--red)"></div>
+          <div class="afeed-body">
+            <div class="afeed-title">Gate B Heavy Congestion</div>
+            <div class="afeed-desc">High crowd at south entrance. Current wait: ~25 minutes. Avoid.</div>
+          </div>
+          <div class="afeed-time">2 min ago</div>
+        </div>
+        <div class="afeed-item amber-afeed">
+          <div class="afeed-dot" style="background:var(--amber)"></div>
+          <div class="afeed-body">
+            <div class="afeed-title">Food Court Peak Hours</div>
+            <div class="afeed-desc">Moderate rush at Level 2 food court. Suggest visiting in 15 minutes.</div>
+          </div>
+          <div class="afeed-time">5 min ago</div>
+        </div>
+        <div class="afeed-item green-afeed">
+          <div class="afeed-dot" style="background:var(--green)"></div>
+          <div class="afeed-body">
+            <div class="afeed-title">Parking Lot A Available</div>
+            <div class="afeed-desc">Good availability near Gate A. Only 35% capacity used. Easy access.</div>
+          </div>
+          <div class="afeed-time">8 min ago</div>
+        </div>
+        <div class="afeed-item green-afeed">
+          <div class="afeed-dot" style="background:var(--green)"></div>
+          <div class="afeed-body">
+            <div class="afeed-title">Restrooms All Clear</div>
+            <div class="afeed-desc">All restroom areas have minimal wait. Avg wait under 2 minutes.</div>
+          </div>
+          <div class="afeed-time">12 min ago</div>
+        </div>
+      </div>
+
+      <div class="alert-btns">
+        <button class="abtn" onclick="addAlert('green','Best Entry Alert','Gate A is fastest right now. Minimal crowd, instant entry.')">Gate Alert</button>
+        <button class="abtn" onclick="addAlert('amber','Food Update','Food court line has reduced. Good time to grab a snack!')">Food Alert</button>
+        <button class="abtn abtn-red" onclick="addAlert('red','Crowd Warning','Zone B is getting crowded. Move to Zone A immediately.')">Crowd Warning</button>
+        <button class="abtn" onclick="addAlert('green','Parking Update','Lot B opened. 150+ new spots available near Gate A.')">Parking Alert</button>
+      </div>
+    </div>
+
+    <!-- ╔══════════════════╗ PANEL 4 — AI COMMAND CENTER ╔══════════════════╗ -->
+    <div id="tab-ai" class="panel" role="tabpanel" aria-labelledby="navtab-ai">
+      <div class="panel-header">
+        <div class="ph-left">
+          <h2>AI Command Center</h2>
+          <span class="panel-badge ai-badge" id="aiPanelBadge">
+            <span class="ai-badge-dot"></span>
+            Gemini 2.5 Flash
+          </span>
+        </div>
+      </div>
+
+      <!-- AI Route Recommendation Card (hidden until first Gemini reply) -->
+      <div class="ai-rec-card" id="aiResponseCard" style="display:none">
+        <div class="arc-header">
+          <div class="arc-title-row">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1l1.5 4.5H13l-3.75 2.75 1.5 4.5L7 10 3.25 12.75l1.5-4.5L1 5.5h4.5L7 1Z" fill="url(#starGrad)"/><defs><linearGradient id="starGrad" x1="0" y1="0" x2="14" y2="14"><stop offset="0%" stop-color="#818cf8"/><stop offset="100%" stop-color="#38bdf8"/></linearGradient></defs></svg>
+            <span class="arc-title">AI Route Recommendation</span>
+          </div>
+          <span class="arc-alert-pill" id="aiAlertBadge">LOW</span>
+        </div>
+        <div class="arc-fields">
+          <div class="arc-field">
+            <span class="arc-lbl">Suggested Gate</span>
+            <span class="arc-val arc-val-gate" id="aiSuggestedGate">—</span>
+          </div>
+          <div class="arc-divider"></div>
+          <div class="arc-field">
+            <span class="arc-lbl">Est. Wait Time</span>
+            <span class="arc-val arc-val-wait" id="aiEstWait">—</span>
+          </div>
+          <div class="arc-divider"></div>
+          <div class="arc-field">
+            <span class="arc-lbl">Required Action</span>
+            <span class="arc-val arc-val-action" id="aiAction">—</span>
+          </div>
+        </div>
+        <!-- Emergency Protocol banner -->
+        <div class="arc-emergency" id="aiEmergency" style="display:none">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1.5L12.5 11H1.5L7 1.5Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><line x1="7" y1="6" x2="7" y2="8.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="7" cy="10" r="0.65" fill="currentColor"/></svg>
+          EMERGENCY PROTOCOL ACTIVE — Initiate crowd dispersal immediately
+        </div>
+      </div>
+
+      <!-- Chat Window -->
+      <div class="chat-window" id="chatWindow">
+        <div class="cmsg bot-cmsg">
+          <div class="cava bot-cava">AI</div>
+          <div class="cbubble bot-cbubble">
+            Welcome to CrowdFlow AI Command Center 🏟️<br/><br/>
+            I have <strong>real-time access</strong> to all gate queues, wait times, and crowd density. Ask me anything about <strong>gates</strong>, <strong>parking</strong>, <strong>food</strong>, <strong>exits</strong>, or <strong>emergency routing</strong>.
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick chips -->
+      <div class="qchips" id="qchips">
+        <button class="qchip" onclick="quickAsk('Which gate is least crowded right now?')">Least crowded gate?</button>
+        <button class="qchip" onclick="quickAsk('What is the food stall wait time?')">Food wait time?</button>
+        <button class="qchip" onclick="quickAsk('Where should I park my car?')">Best parking?</button>
+        <button class="qchip" onclick="quickAsk('How do I exit quickly after the event?')">Fast exit route?</button>
+        <button class="qchip" onclick="quickAsk('Where are the nearest restrooms?')">Restroom location?</button>
+        <button class="qchip" onclick="quickAsk('How crowded is the venue overall?')">Overall crowd?</button>
+      </div>
+
+      <!-- Input Row -->
+      <div class="chat-irow">
+        <input type="text" id="aiInput" class="chat-inp"
+               placeholder="Ask the AI about gate congestion, routing, or emergencies…"
+               onkeydown="if(event.key==='Enter') sendAI()" />
+        <button class="send-btn" onclick="sendAI()" aria-label="Send">
+          <svg width="17" height="17" viewBox="0 0 17 17" fill="none"><path d="M2 8.5L15 2L8.5 15L7.5 9.5L2 8.5Z" fill="currentColor"/></svg>
+        </button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ═══════════════════════════════════ FOOTER ═══════════════════════════════════ -->
+  <footer>
+    <div class="footer-inner">
+      <span>CrowdFlow AI — PromptWars: Virtual 2026</span>
+      <span class="footer-sep">·</span>
+      <span>Powered by Gemini 2.5 Flash · Hack2skill</span>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
