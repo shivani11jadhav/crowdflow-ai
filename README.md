@@ -1,50 +1,57 @@
 # CrowdFlow AI 🏟️
+> **Submission for Prompt Wars - Challenge 1**
 
-CrowdFlow AI is a smart crowd management system designed to enhance the experience at large-scale sporting venues.
-
-🚀 Future Scope
-- Integration with real-time APIs  
-- IoT sensors for live crowd tracking  
-- GPS-based indoor navigation  
-- Mobile app version  
-- Multi-language support  
-
-
- 🎯 Problem Statement
-Large stadiums often face:
-- Long queues at entry gates  
-- Uneven crowd distribution  
-- Lack of real-time visibility  
-
-This leads to delays, frustration, and poor user experience.
+CrowdFlow AI is an agentic, Generative AI-powered crowd management system designed to eliminate congestion, optimize exit routes, and streamline venue operations at large-scale sporting and event arenas.
 
 ---
 
-## 💡 Solution
-CrowdFlow AI provides:
-- Smart navigation suggestions
-- Crowd congestion detection
-- Wait time optimization
-- Real-time alerts for better decision making
+## 🏆 Prompt Wars Challenge 1 Focus
 
-## 🛠️ Tech Stack
-- HTML
-- CSS
-- JavaScript
+* **Challenge Context:** Prompt Wars - Challenge 1 Submission.
+* **Core Innovation:** Beyond static mapping, CrowdFlow AI dynamically models crowd telemetry in real time. It automatically generates safe navigation re-routes and deploys intelligent fallback alerts to venue managers without human intervention.
+* **Generative AI Integration:** Powered by Google's Gemini models via an autonomous AI Agent (`agent.js`) that analyzes live density metrics, sanitizes inputs (`sanitize.js`), and generates natural language operational directives for safety officers and attendees.
 
-## 🧠 How It Works
-- Simulated real-time data updates crowd density  
-- System identifies high & low congestion zones  
-- Alerts guide users toward optimal paths  
-- AI Assistant answers queries based on live conditions  
+---
 
+## 🎯 Problem Statement
 
- 📂 Project Structure
-<img width="1886" height="961" alt="image" src="https://github.com/user-attachments/assets/622577f6-74e2-4896-b21b-2be736646609" />
-<img width="1899" height="964" alt="image" src="https://github.com/user-attachments/assets/cd6df1d8-0deb-4b33-8d54-f11cb9798193" />
+Large stadiums and event venues consistently suffer from:
+* Unmanaged entry and exit bottlenecking leading to safety risks.
+* Unpredictable crowd density spikes across concourses.
+* Lack of real-time operational guidance for attendees and venue staff.
 
-## 🌐 Live Demo
-https://github.com/shivani11jadhav/crowdflow-ai
+---
 
+## 💡 Solution & Features
 
-Made with ❤️ by Shivani Pratap Jadhav
+* **Real-time Crowd Telemetry:** Simulates and measures live spatial occupancy levels (`crowdSimulator.js`).
+* **Generative AI Agent:** Synthesizes complex crowd analytics into actionable natural-language instructions.
+* **Automated Safety Sanity Checks:** Ensures prompt injections and malformed data are filtered before reaching the AI core.
+* **Dynamic Interactive Dashboard:** Multi-page responsive Web UI showcasing live heatmaps, venue statuses, and AI assistant capabilities.
+
+---
+
+## 🛠️ Tech Stack & Architecture
+
+* **Frontend:** HTML5, CSS3, Vanilla JavaScript (ES6+)
+* **Backend:** Node.js, Express.js
+* **Generative AI / Agent:** Google Gemini API (`@google/genai`), Custom Agent Workflow
+* **Real-time Communication:** WebSockets / Socket.io
+
+---
+
+## 📁 Project Structure
+
+```text
+crowdflow-ai/
+├── index.html               # Multi-page Responsive UI Layout
+├── script.js                # Frontend Client Controller
+├── style.css                # Visual Styling & Dashboard Layouts
+├── README.md                # Documentation & Submission Info
+└── backend/                 # Secure Agentic Server Stack
+    ├── server.js            # Express API Server
+    ├── agent.js             # Gemini AI Agent Core
+    ├── crowdSimulator.js    # Real-time Telemetry Simulator
+    ├── sanitize.js          # Input Guardrails & Prompt Protection
+    ├── .env.example         # Environment Variable Template
+    └── package.json         # Server Dependencies
